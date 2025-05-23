@@ -1,6 +1,9 @@
 # TaxCraft - AI-Powered Automated Tax Assistant
 
-![TaxCraft Banner](https://via.placeholder.com/1200x400/2962FF/FFFFFF?text=TaxCraft+AI+Tax+Assistant)
+<p align="center">
+  <img src="./Images/TaxCraft.png" alt="TaxCraft Banner">
+</p>
+
 
 TaxCraft is an innovative AI-driven web application that provides personalized tax deduction advice using cutting-edge machine learning and natural language processing technologies. It simplifies tax planning by analyzing users' financial documents and offering tailored recommendations to optimize tax savings under Indian tax laws.
 
@@ -153,11 +156,15 @@ streamlit run app.py
 
 ### Example Interaction
 
-**User Query:**  
-"I earn ₹18L annually with ₹3L in investments. How to optimize tax?"
-
-**TaxCraft Response:**  
-*(Demo response here)*
+**User Query & TaxCraft Response:**
+---
+![Response](./Images/1.jpeg)
+---
+![Response](./Images/2.jpeg)
+---
+![Response](./Images/3.jpeg)
+---
+![Response](./Images/4.jpeg)
 
 ---
 
@@ -175,7 +182,6 @@ streamlit run app.py
 2. Vishal Daimane
 3. Rudraprathap Patil
 4. Shubhang sethi
-
 
 ## License
 
