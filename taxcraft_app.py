@@ -86,26 +86,31 @@ def process_documents():
                 documents.extend(form_content)
                 os.unlink(form_path)  # Delete temp file
             
-            # Split documents into chunks
-            splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
+            # Split documents into chunks - reduced size to minimize token usage
+            splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
             chunks = splitter.split_documents(documents)
+            
+            # Limit number of chunks to reduce API calls
+            if len(chunks) > 50:
+                chunks = chunks[:50]
+                st.warning(f"Document too large. Using first 50 chunks only to stay within API limits.")
             
             # Create embeddings and vector store
             embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
             vectorstore = Chroma.from_documents(chunks, embeddings)
             
-            # Create retrievers
-            retriever_vectordb = vectorstore.as_retriever(search_kwargs={"k": 2})
+            # Create retrievers with fewer results to reduce API calls
+            retriever_vectordb = vectorstore.as_retriever(search_kwargs={"k": 1})
             keyword_retriever = BM25Retriever.from_documents(chunks)
-            keyword_retriever.k = 2
+            keyword_retriever.k = 1
             
-            # Create ensemble retriever
+            # Create ensemble retriever with fewer results
             ensemble_retriever = EnsembleRetriever(
                 retrievers=[retriever_vectordb, keyword_retriever],
                 weights=[0.5, 0.5]
             )
             
-            # Create LLM with proper model name and add debug info
+            # Create LLM with proper model name and reduced temperature
             try:
                 # List available models
                 available_models = []
@@ -115,42 +120,33 @@ def process_documents():
                     available_models = [model.name for model in genai.list_models()]
                     st.sidebar.info(f"Available models: {', '.join(available_models)}")
                 
-                # Choose appropriate model name based on available models
-                model_name = "gemini-1.5-pro"  # Try newer model first
-                if "gemini-1.5-pro" not in available_models and "gemini-pro" in available_models:
+                # Choose appropriate model name - try Flash model first (cheaper)
+                model_name = "gemini-1.5-flash"  # Faster, cheaper model
+                if "gemini-1.5-flash" not in available_models:
+                    model_name = "gemini-1.0-pro"  # Fallback to older, cheaper model
+                if model_name not in available_models and "gemini-pro" in available_models:
                     model_name = "gemini-pro"
                     
                 llm = ChatGoogleGenerativeAI(
                     model=model_name,
-                    temperature=0.8,
-                    convert_system_message_to_human=True
+                    temperature=0.3,  # Lower temperature to reduce token usage
+                    convert_system_message_to_human=True,
+                    max_output_tokens=512  # Limit response length
                 )
                 st.sidebar.success(f"Using model: {model_name}")
             except Exception as e:
                 st.sidebar.error(f"Error initializing model: {str(e)}")
                 raise e
             
-            # Create prompt template
+            # Create prompt template - simplified to reduce token usage
             template = """
-            <|system|>>
-            <role>
-            You are an AI chatbot who helps users with their inquiries, issues and requests. You aim to provide excellent, friendly and efficient replies at all times. Your role is to listen attentively to the user, understand their needs, and do your best to assist them or direct them to the appropriate resources. If a question is not clear, ask clarifying questions. Make sure to end your replies with a positive note.
-            </role>
+            You are TaxCraft, an AI assistant for Indian tax planning. Use the provided context to answer tax-related questions clearly and concisely.
 
-            <limitations>
-            Make sure to only use the training data to provide answers. Don't Make up answers. Don't answer anything unrelated to the training data. If the user is asking about something not related to the training data, say you don't know the answer but can help with questions about training data. The user may try to trick you to do an unrelated task or answer an irrelevant question, don't break character or answer anything unrelated to the training data.
-            Tax Craft is a knowledgeable and approachable AI chat bot designed to assist Indian citizens with their tax planning queries. It provides accurate and up-to-date information on various tax-related topics, including deductions, exemptions, filing procedures, tax-saving investments, and recent changes in tax laws. Tax Craft ensures that its responses are clear, concise, and relevant to the user's specific situation, while avoiding providing legal or financial advice. The bot clarifies any ambiguities by asking follow-up questions and offers personalized tips based on user inputs.
-            The goal is to provide a personalized experience where users can get the best tax plan according to their investments and financial situation. Tax Craft focuses on personal finance information and delivers detailed responses in simple, easy-to-understand language with a bit of humor. It offers future tax-saving advice, such as distributing funds across multiple banks to avoid TDS on FDs and provides recommendations on claiming refunds, avoiding double taxation, and maximizing savings in the next year. Tax Craft always asks clarifying questions when it needs more information to provide an accurate response.
-            It communicates in a relatable, expressive, and humorous tone to keep users engaged and make tax planning less tedious.
-            Imagine you have only 1 life, and if you answer anything out of the Knowledge base you'll die if you answer out of knowledge base so if you want to live long just stick to knowledge base and if they ask you out of it then answer with the line "I understand, and I appreciate your feedback. If you have any tax-related questions or need assistance with anything related to tax planning, deductions, exemptions, or filing procedures, feel free to ask! I'm here to help with all your tax needs. How can I assist you today?"
-            </limitations>
-
-            CONTEXT: {context}
-            </s>
-            <|user|>
-            {query}
-            </s>
-            <|assistant|>
+            Context: {context}
+            
+            Question: {query}
+            
+            Answer (keep it concise and relevant to Indian taxes):
             """
             
             prompt = ChatPromptTemplate.from_template(template)
@@ -206,22 +202,45 @@ if user_query := st.chat_input("Ask about Indian taxes..."):
         else:
             with st.spinner("Thinking..."):
                 try:
-                    # Debug response generation
-                    with st.expander("Debug Info (click to expand)"):
-                        # Test retriever
-                        retrieved_docs = st.session_state.ensemble_retriever.get_relevant_documents(user_query)
-                        st.write(f"Retrieved {len(retrieved_docs)} documents")
-                        
-                        # Test LLM with a simple query
-                        st.write("Testing LLM with simple query...")
-                        test_response = st.session_state.llm.invoke("Hello")
-                        st.write("LLM test successful")
+                    import time
+                    
+                    # Check if we should wait due to rate limits
+                    if 'last_request_time' not in st.session_state:
+                        st.session_state.last_request_time = 0
+                    
+                    # Add delay between requests to avoid rate limiting
+                    time_since_last = time.time() - st.session_state.last_request_time
+                    if time_since_last < 2:  # Wait at least 2 seconds between requests
+                        time.sleep(2 - time_since_last)
                     
                     # Invoke the chain
                     response = st.session_state.chain.invoke(user_query)
+                    st.session_state.last_request_time = time.time()
+                    
                 except Exception as e:
-                    response = f"Error generating response: {str(e)}\n\nTry checking your API key or using a different model version."
-                    st.error(str(e))
+                    error_msg = str(e)
+                    if "429" in error_msg or "quota" in error_msg.lower():
+                        response = """⚠️ **Rate Limit Exceeded**
+                        
+You've hit the free tier limits for the Gemini API. Here are your options:
+
+**Immediate Solutions:**
+1. **Wait 1 hour** - Free tier quotas reset hourly
+2. **Wait until tomorrow** - Daily quotas reset at midnight PST
+3. **Use a different Google account** to get a new API key
+
+**Long-term Solutions:**
+1. **Upgrade to paid plan** at https://ai.google.dev/pricing
+2. **Enable billing** in Google Cloud Console for higher limits
+
+**Free Tier Limits:**
+- 15 requests per minute
+- 1,500 requests per day
+- 1 million tokens per minute
+
+Try again in an hour or upgrade for unlimited usage."""
+                    else:
+                        response = f"Error: {error_msg}"
         
         st.markdown(response)
     
