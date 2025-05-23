@@ -52,28 +52,8 @@ Regularly updated knowledge base with latest tax policies
 </div>
 
 ## System Architecture
-
-```mermaid
-graph LR
-    A[User Input] --> B{Input Type}
-    B -->|Text Query| C[Query Embedding]
-    B -->|Document| D[Tesseract OCR]
-    D --> E[Text Extraction]
-    E --> F[Text Chunking]
-    F --> G[Embedding Generation]
-    C --> H[Vector Database]
-    G --> H
-    H --> I[Similarity Search]
-    I --> J[Context Retrieval]
-    J --> K[LLM Generation]
-    K --> L[Response Generation]
-    L --> M[User Output]
-    
-    subgraph Knowledge Base
-    N[Tax Laws] --> H
-    O[Policy Updates] --> H
-    end
-```
+---
+![flowchart](./Images/flowchart.png)
 
 ## Key Components:
 
