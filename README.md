@@ -159,7 +159,7 @@ streamlit run app.py
 ## Contributors
 
 1. Abhishek V K   
-2. Vishal Daimane
+2. [Vishal Daimane](https://github.com/VishalDaimane)
 3. Rudraprathap Patil
 4. Shubhang sethi
 
